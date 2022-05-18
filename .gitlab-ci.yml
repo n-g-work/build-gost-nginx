@@ -1,0 +1,34 @@
+---
+variables:
+  registry_address: 'registry'
+  image_name: 'gost-nginx'
+  nginx_version: '1.21.6'
+  openssl_version: 'OpenSSL_1_1_1n'
+  gost_engine_version: '58a46b289d6b8df06072fc9c0304f4b2d3f4b051'
+  gitlab_runner_service: 'localhost'
+  gitlab_runner_service_port: '2375'
+
+stages:          # List of stages for jobs, and their order of execution
+  - build
+
+build_image:
+  stage: build
+  image: docker
+  services:
+    - name: docker:dind
+      command: ["--insecure-registry","${registry_address}"]
+  variables:
+    DOCKER_HOST: "tcp://${gitlab_runner_service}:${gitlab_runner_service_port}/"
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - built_image_tag="${registry_address}/${image_name}:${nginx_version}-${openssl_version}"
+    - while ! nc -z ${gitlab_runner_service} ${gitlab_runner_service_port} ; do sleep 1 ; done
+    - docker info
+    - docker build
+      -t ${built_image_tag}
+      --build-arg NGINX_VERSION=${nginx_version}
+      --build-arg OPENSSL_VERSION=${openssl_version}
+      --build-arg GOST_ENGINE_VERSION=${gost_engine_version}
+      -f "Dockerfile"
+      .
+    - docker push ${built_image_tag}
